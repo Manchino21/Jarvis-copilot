@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jarvis Copilot</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-0: #0f0d14;
+  --bg-1: #181320;
+  --panel: #1e1927;
+  --panel-edge: #2e2638;
+  --fg: #f4f1f7;
+  --fg-dim: #9c93ac;
+  --accent-idle: #6a6278;
+  --accent-listen: #f3a73d;
+  --accent-think: #9b7cf0;
+  --accent-speak: #35c9c2;
+  --accent-warn: #ef6a5b;
+  --accent-boot: #35c9c2;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(60% 46% at 50% 18%, color-mix(in srgb, var(--ring-color, var(--accent-idle)) 16%, transparent), transparent 70%),
+    radial-gradient(90% 60% at 50% 100%, #221a30, transparent),
+    var(--bg-0);
+  color: var(--fg);
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: background 0.6s ease;
+}
+
+/* ---------- boot overlay ---------- */
+#boot {
+  position: fixed; inset: 0; z-index: 50;
+  background: #06070a;
+  color: var(--accent-boot);
+  font-family: "Share Tech Mono", monospace;
+  font-size: 14px;
+  padding: max(20px, env(safe-area-inset-top, 0px)) 20px 20px max(20px, env(safe-area-inset-left, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  transition: opacity 0.5s ease;
+}
+#boot .line { opacity: 0; transform: translateY(2px); transition: opacity 0.25s ease, transform 0.25s ease; }
+#boot .line.show { opacity: 1; transform: none; }
+#boot .cursor { display: inline-block; width: 8px; height: 14px; background: var(--accent-boot); vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+#boot.hide { opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { #boot .line { transition: none; } }
+
+.wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+header {
+  padding-block: 14px 8px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--panel-edge) 70%, transparent);
+}
+.eyebrow {
+  font-family: "Rajdhani", "IBM Plex Sans", sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ring-color, var(--accent-idle)); box-shadow: 0 0 8px 1px var(--ring-color, var(--accent-idle)); }
+.clock { font-variant-numeric: tabular-nums; color: var(--fg-dim); }
+h1 { margin: 2px 0 0; font-family: "Rajdhani", "IBM Plex Sans", sans-serif; font-weight: 700; font-size: 28px; letter-spacing: 0.03em; text-wrap: balance; }
+.header-tools { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.lang-toggle { display: flex; background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 10px; padding: 3px; gap: 2px; }
+.lang-toggle button { font-family: "Rajdhani", sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.04em; padding: 6px 10px; border-radius: 7px; border: none; background: transparent; color: var(--fg-dim); }
+.lang-toggle button[aria-pressed="true"] { background: var(--panel-edge); color: var(--fg); }
+.gear-btn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--fg-dim); font-size: 16px; display: flex; align-items: center; justify-content: center; }
+.gear-btn[aria-pressed="true"] { color: var(--fg); border-color: var(--ring-color, var(--accent-idle)); }
+
+.settings-panel { flex: 0 0 auto; background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 12px; margin-top: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.settings-panel label { font-family: "Rajdhani", sans-serif; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-dim); }
+.settings-row { display: flex; gap: 8px; }
+.settings-row input[type="password"], .settings-row input[type="text"], select#voiceSelect {
+  flex: 1; min-width: 0; background: var(--bg-1); color: var(--fg); border: 1px solid var(--panel-edge); border-radius: 8px; padding: 9px 10px; font-size: 14px; font-family: "IBM Plex Sans", sans-serif;
+}
+.settings-row button { flex: 0 0 auto; background: var(--panel-edge); color: var(--fg); border: none; border-radius: 8px; padding: 9px 14px; font-size: 13px; font-weight: 600; }
+.settings-hint { font-size: 12px; color: var(--fg-dim); line-height: 1.45; }
+.settings-hint a { color: var(--accent-speak); }
+.key-status { font-size: 12px; font-weight: 600; font-family: "Rajdhani", sans-serif; letter-spacing: 0.03em; }
+.key-status.ok { color: var(--accent-speak); }
+.key-status.missing { color: var(--accent-warn); }
+
+main { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; padding-block: 10px 8px; }
+.stage { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.orb-frame { position: relative; width: 148px; height: 148px; }
+.orb-ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--ring-color, var(--accent-idle)); opacity: 0.35; transition: border-color 0.4s ease; }
+.orb-ring.r2 { inset: -14px; opacity: 0.16; }
+.orb {
+  position: absolute; inset: 16px; border-radius: 50%;
+  background: radial-gradient(circle at 32% 26%, color-mix(in srgb, var(--ring-color, var(--accent-idle)) 50%, white 16%), var(--ring-color, var(--accent-idle)) 64%, color-mix(in srgb, var(--ring-color, var(--accent-idle)) 72%, black 38%));
+  box-shadow: 0 0 0 1px var(--panel-edge), 0 14px 34px -10px color-mix(in srgb, var(--ring-color, var(--accent-idle)) 65%, transparent);
+  display: flex; align-items: center; justify-content: center; font-size: 42px;
+  transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+body[data-state="listening"] .orb-ring { animation: pulse 1.6s ease-in-out infinite; }
+body[data-state="listening"] .orb-ring.r2 { animation-delay: 0.3s; }
+body[data-state="speaking"] .orb { animation: speak-bounce 0.5s ease-in-out infinite; }
+body[data-state="thinking"] .orb { animation: think-spin 2.2s linear infinite; }
+@keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.35; } 50% { transform: scale(1.12); opacity: 0.06; } }
+@keyframes speak-bounce { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.045); } }
+@keyframes think-spin { 0% { filter: hue-rotate(0deg) brightness(1); } 50% { filter: hue-rotate(10deg) brightness(1.1); } 100% { filter: hue-rotate(0deg) brightness(1); } }
+@media (prefers-reduced-motion: reduce) { body[data-state] .orb-ring, body[data-state] .orb { animation: none !important; } }
+
+.state-label { font-family: "Rajdhani", sans-serif; font-weight: 600; font-size: 15px; letter-spacing: 0.05em; color: var(--ring-color, var(--fg-dim)); min-height: 20px; text-align: center; }
+.interim { font-size: 13px; color: var(--fg-dim); min-height: 16px; text-align: center; max-width: 320px; }
+
+.panel-frame { flex: 1; min-height: 0; width: 100%; max-width: 480px; display: flex; flex-direction: column; background: color-mix(in srgb, var(--panel) 85%, transparent); border: 1px solid var(--panel-edge); border-radius: 16px; overflow: hidden; box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent); }
+.notice { margin: 10px 10px 0; background: color-mix(in srgb, var(--accent-warn) 16%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent-warn) 45%, var(--panel-edge)); color: var(--fg); border-radius: 10px; padding: 9px 12px; font-size: 13px; line-height: 1.4; }
+.transcript { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+.bubble { max-width: 86%; padding: 9px 13px; border-radius: 14px; font-size: 14px; line-height: 1.4; }
+.bubble.user { align-self: flex-end; background: var(--panel-edge); color: var(--fg); border-bottom-right-radius: 4px; }
+.bubble.assistant { align-self: flex-start; background: color-mix(in srgb, var(--bg-1) 80%, var(--panel)); border: 1px solid var(--panel-edge); color: var(--fg); border-bottom-left-radius: 4px; }
+.bubble .tag { display: block; font-family: "Rajdhani", sans-serif; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-dim); margin-bottom: 2px; }
+.empty-hint { margin: auto; text-align: center; color: var(--fg-dim); font-size: 13px; max-width: 260px; line-height: 1.5; padding: 20px; }
+
+.type-fallback { flex: 0 0 auto; display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--panel-edge); background: color-mix(in srgb, var(--bg-1) 60%, transparent); }
+.type-fallback input { flex: 1; min-width: 0; background: var(--bg-1); border: 1px solid var(--panel-edge); border-radius: 10px; padding: 10px 12px; color: var(--fg); font-size: 14px; }
+.type-fallback button { flex: 0 0 auto; background: var(--accent-speak); color: #04221f; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 700; font-family: "Rajdhani", sans-serif; letter-spacing: 0.03em; }
+
+footer { flex: 0 0 auto; display: flex; flex-direction: column; gap: 10px; padding-block: 10px max(14px, env(safe-area-inset-bottom, 0px)); }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.chips button { flex: 0 0 auto; font-size: 13px; font-weight: 500; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--fg); white-space: nowrap; }
+.chips button:active { background: var(--panel-edge); transform: scale(0.97); }
+.dock-primary { display: flex; }
+.btn { font-family: "Rajdhani", sans-serif; font-weight: 700; font-size: 18px; letter-spacing: 0.04em; text-transform: uppercase; padding: 17px 12px; border-radius: 14px; border: none; min-height: 58px; width: 100%; transition: transform 0.12s ease; }
+.btn:active { transform: scale(0.98); }
+.btn-primary { background: linear-gradient(135deg, var(--accent-listen), color-mix(in srgb, var(--accent-listen) 65%, #ffe0a8)); color: #241703; box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--accent-listen) 70%, transparent); }
+.dock-secondary { display: flex; gap: 10px; }
+.btn-secondary { flex: 1; background: var(--panel); border: 1px solid var(--panel-edge); color: var(--fg); font-family: "Rajdhani", sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.04em; text-transform: uppercase; padding: 13px 10px; border-radius: 12px; min-height: 48px; }
+.btn-mic { flex: 0 0 56px; background: var(--panel); border: 1px solid var(--panel-edge); color: var(--fg); font-size: 20px; border-radius: 12px; min-height: 48px; }
+.btn-mic[aria-pressed="true"] { background: color-mix(in srgb, var(--accent-listen) 30%, var(--panel)); border-color: var(--accent-listen); }
+.dock-hint { font-size: 11px; color: var(--fg-dim); text-align: center; letter-spacing: 0.02em; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="boot">
+  <div class="line" data-line>&gt; JARVIS COPILOT — secuencia de arranque</div>
+  <div class="line" data-line>&gt; Calibrando micrófono…</div>
+  <div class="line" data-line>&gt; Cargando voz…</div>
+  <div class="line" data-line>&gt; Copiloto listo.<span class="cursor"></span></div>
+</div>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow"><span class="dot" id="statusDot"></span>Copiloto de viaje · <span class="clock" id="clock">--:--</span></div>
+      <h1>Jarvis</h1>
+    </div>
+    <div class="header-tools">
+      <div class="lang-toggle" role="group" aria-label="Idioma de escucha">
+        <button id="langEs" aria-pressed="true" type="button">ES</button>
+        <button id="langEn" aria-pressed="false" type="button">EN</button>
+      </div>
+      <button class="gear-btn" id="gearBtn" type="button" aria-pressed="false" aria-label="Ajustes">⚙</button>
+    </div>
+  </header>
+
+  <div class="settings-panel" id="settingsPanel" hidden>
+    <div>
+      <label for="apiKeyInput">Clave de API de Anthropic <span class="key-status missing" id="keyStatus">sin configurar</span></label>
+      <div class="settings-row">
+        <input id="apiKeyInput" type="password" placeholder="sk-ant-...">
+        <button id="saveKeyBtn" type="button">Guardar</button>
+      </div>
+      <div class="settings-hint">Se guarda solo en este navegador/iPad (localStorage), nunca se sube a ningún lado más que a la API de Anthropic directamente. Conseguila gratis en <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> (es de pago por uso, pero centavos por charla).</div>
+    </div>
+    <div>
+      <label for="voiceSelect">Voz de Jarvis</label>
+      <div class="settings-row">
+        <select id="voiceSelect"></select>
+        <button id="testVoiceBtn" type="button">🔊 Probar</button>
+      </div>
+      <div class="settings-hint">Si suena robótica, instalá una voz "mejorada/premium" en Ajustes del iPad → Accesibilidad → Contenido hablado → Voces.</div>
+    </div>
+  </div>
+
+  <main>
+    <div class="stage">
+      <div class="orb-frame">
+        <div class="orb-ring r1"></div>
+        <div class="orb-ring r2"></div>
+        <div class="orb" id="orb">🎙️</div>
+      </div>
+      <div class="state-label" id="stateLabel">Tocá SALUDAR cuando suba tu pasajero</div>
+      <div class="interim" id="interim"></div>
+    </div>
+
+    <div class="panel-frame">
+      <div class="notice" id="notice" hidden></div>
+      <div class="transcript" id="transcript">
+        <div class="empty-hint" id="emptyHint">La conversación con tu pasajero va a aparecer acá, como subtítulos.</div>
+      </div>
+      <form class="type-fallback" id="typeForm">
+        <input id="typeInput" type="text" placeholder="Escribí lo que diría el pasajero…" autocomplete="off">
+        <button type="submit">Enviar</button>
+      </form>
+    </div>
+  </main>
+
+  <footer>
+    <div class="chips" id="chips">
+      <button type="button" data-cmd="joke">😄 Contale un chiste</button>
+      <button type="button" data-cmd="ask">🗣️ Preguntale algo</button>
+      <button type="button" data-cmd="cheer">🙌 Animalo</button>
+      <button type="button" data-cmd="bye">👋 Despedida</button>
+    </div>
+    <div class="dock-primary">
+      <button class="btn btn-primary" id="greetBtn" type="button">Saludar</button>
+    </div>
+    <div class="dock-secondary">
+      <button class="btn-mic" id="micBtn" type="button" aria-pressed="false" aria-label="Hablar">🎤</button>
+      <button class="btn-secondary" id="endBtn" type="button">Terminar</button>
+    </div>
+    <div class="dock-hint">Saludar siempre arranca de cero · los chips y el micrófono funcionan solos, sin volver a saludar</div>
+  </footer>
+</div>
+
+<script src="jarvis.js"></script>
+</body>
+</html>
