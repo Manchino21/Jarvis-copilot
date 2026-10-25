@@ -230,6 +230,20 @@
     els.transcript.scrollTop = els.transcript.scrollHeight;
   }
 
+  // ---------- mic permission warm-up ----------
+  // iOS Safari can lose the first thing said if the mic permission prompt is
+  // still settling when recognition.start() fires async (after TTS ends).
+  // Ask for it immediately on the tap that starts a conversation, so by the
+  // time we actually listen, permission is already resolved.
+  var micWarmed = false;
+  function warmUpMic() {
+    if (micWarmed || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+    micWarmed = true;
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(function (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); })
+      .catch(function () { micWarmed = false; });
+  }
+
   // ---------- speech synthesis ----------
   function speak(text, onDone) {
     setState("speaking", lang === "es" ? "Hablando…" : "Speaking…", "var(--accent-speak)");
@@ -240,8 +254,11 @@
       var list = voicesByLang[lang] || [];
       var match = list.find(function (v) { return v.voiceURI === chosenURI; }) || list[0];
       if (match) { u.voice = match; u.lang = match.lang; } else { u.lang = recogLang(); }
-      u.onend = function () { onDone && onDone(); };
-      u.onerror = function () { onDone && onDone(); };
+      // small breather before the mic opens, so recognition doesn't race
+      // the tail end of Jarvis's own voice coming out of the speaker
+      var afterPause = function () { setTimeout(function () { onDone && onDone(); }, 450); };
+      u.onend = afterPause;
+      u.onerror = afterPause;
       window.speechSynthesis.speak(u);
     } catch (e) {
       onDone && onDone();
@@ -368,6 +385,7 @@
   }
 
   function ensureActive() {
+    warmUpMic();
     if (!active) {
       active = true;
       turns = [];
@@ -384,6 +402,7 @@
     els.interim.textContent = "";
   }
   function beginConversation() {
+    warmUpMic();
     active = true;
     turns = [];
     emptyRounds = 0;
